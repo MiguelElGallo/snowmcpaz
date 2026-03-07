@@ -4,12 +4,11 @@ This repository is already standalone and can be packaged locally.
 
 ## Remaining Metadata Work
 
-1. Replace the placeholder `publisher` value in `package.json` with your real VS Code Marketplace publisher ID.
-2. Optionally rename the extension if you want a Marketplace-facing name different from the current package name.
-3. Add Marketplace branding assets if you want them before first publication:
-   - icon PNG
-   - support contact
-   - repository URL is already set
+1. Optionally rename the extension if you want a Marketplace-facing name different from the current package name.
+2. Review Marketplace branding assets before wider release:
+   - icon PNG is included
+   - support/issues link is in the README and repository metadata
+   - repository URL is set
 
 ## Before Packaging
 
@@ -24,6 +23,18 @@ npm run build
 npm test
 npm run package:vsix
 ```
+
+## Automated Release Flow
+
+1. Add a repository secret named `VSCE_PAT` with your Marketplace Personal Access Token.
+2. Bump the version locally:
+
+```bash
+npm run bump:patch
+```
+
+3. Push the resulting Git tag.
+4. GitHub Actions runs `.github/workflows/release.yml`, verifies the extension, publishes it to Marketplace, and uploads the VSIX artifact.
 
 ## Before Publishing To Marketplace
 
@@ -55,4 +66,6 @@ vsce publish
 - `npm test` passes.
 - `npm run package:vsix` produces a local VSIX.
 - CI workflow is available in `.github/workflows/ci.yml`.
+- Tag-driven Marketplace publishing is available in `.github/workflows/release.yml` once `VSCE_PAT` is configured.
+
 

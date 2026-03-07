@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title>Snowflake MCP for Azure Auth</title>
+  <desc>Blue cloud and snowflake icon representing Snowflake MCP with Azure authentication.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f2747" />
+      <stop offset="100%" stop-color="#1d6fd6" />
+    </linearGradient>
+    <linearGradient id="cloud" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#70c7ff" />
+      <stop offset="100%" stop-color="#d5f1ff" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="52" fill="url(#bg)" />
+  <circle cx="100" cy="108" r="34" fill="url(#cloud)" />
+  <circle cx="142" cy="100" r="46" fill="url(#cloud)" />
+  <circle cx="176" cy="120" r="30" fill="url(#cloud)" />
+  <rect x="66" y="118" width="130" height="44" rx="22" fill="url(#cloud)" />
+  <g fill="none" stroke="#0f2747" stroke-linecap="round" stroke-width="10">
+    <path d="M128 74v108" />
+    <path d="M91 96l74 44" />
+    <path d="M91 140l74-44" />
+    <path d="M82 128h92" />
+    <path d="M103 81l50 94" />
+    <path d="M103 175l50-94" />
+  </g>
+  <g fill="#0f2747">
+    <circle cx="128" cy="74" r="8" />
+    <circle cx="128" cy="182" r="8" />
+    <circle cx="91" cy="96" r="8" />
+    <circle cx="165" cy="140" r="8" />
+    <circle cx="91" cy="140" r="8" />
+    <circle cx="165" cy="96" r="8" />
+  </g>
+</svg>
