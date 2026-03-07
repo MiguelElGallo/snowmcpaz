@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.5
+
+- Rewrites the README around role-based setup, with clearer end-user, Entra admin, and Snowflake admin paths.
+- Adds an Entra admin checklist document for app registration, Azure CLI pre-authorization, consent handling, and handoff.
+- Documents the required Snowflake External OAuth authorization integration more explicitly before extension use.
+
 ## 0.0.4
 
 - Overrides vulnerable transitive dev dependencies pulled in through Mocha.

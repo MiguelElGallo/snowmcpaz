@@ -4,136 +4,148 @@
 
 VS Code extension that exposes a Snowflake-managed MCP server through a local Node.js broker and authenticates requests with a Microsoft Entra access token acquired from Azure CLI.
 
-## What This Extension Does
+Role shortcuts:
 
-The extension starts a local stdio broker inside VS Code.
+- [End users](#quick-start-for-end-users)
+- [Entra admins](#for-entra-admins)
+- [Snowflake admins](#for-snowflake-admins)
+- [Troubleshooting](#troubleshooting)
 
-That broker:
+## Overview
 
-- gets a token with `az account get-access-token`
-- sends the token to your Snowflake MCP endpoint
-- forwards JSON-RPC messages between VS Code and Snowflake
-- retries once if Snowflake returns HTTP `401`
+The extension does four things:
 
-The extension does not create your Entra app registration, your Snowflake security integration, your Snowflake MCP server, or your Snowflake grants.
+- registers an MCP server definition in VS Code
+- starts a local Node.js stdio broker
+- acquires an access token with `az account get-access-token`
+- forwards JSON-RPC calls to your Snowflake MCP endpoint
 
-Those pieces must already exist.
+The extension does not create your Entra app registration, Snowflake MCP server, External OAuth integration, user mapping, or role grants.
 
-## Before You Install It
+Those pieces must already exist before the extension can work.
 
-If you only read one section, read this one.
+## Architecture
 
-This extension works only when all of the following are already true:
+```mermaid
+flowchart LR
+		user["VS Code user"] --> vscode["VS Code extension"]
+		vscode --> broker["Local MCP broker"]
+		broker --> az["Azure CLI"]
+		az --> entra["Microsoft Entra app\napi://<app-id>"]
+		broker --> snowflake["Snowflake MCP endpoint"]
+		snowflake --> broker
+```
 
-1. You have a Snowflake MCP endpoint.
-2. Snowflake is configured for External OAuth with Microsoft Entra.
-3. Your Entra app registration has an Application ID URI such as `api://<app-id>`.
-4. Azure CLI is allowed to request tokens for that Entra app.
-5. Your Snowflake user can be mapped from the token claims and can assume the role you plan to send.
+## Who Does What
 
-If any of those are missing, the extension cannot compensate for it. It will fail at token acquisition or at the Snowflake connection test.
+| Task | Owner | Done when |
+|---|---|---|
+| Create Entra app registration | Entra admin | App has `api://<app-id>` and `session:role-any` |
+| Pre-authorize Azure CLI | Entra admin | Azure CLI app ID is added to Authorized client applications |
+| Handle tenant consent | Entra admin | Users can acquire a token without consent failures |
+| Create Snowflake MCP server | Snowflake admin | Endpoint URL is known and returns JSON-RPC responses |
+| Configure External OAuth | Snowflake admin | Audience, issuer, JWKS URL, and user mapping are valid |
+| Grant usable Snowflake role | Snowflake admin | Target role can use the database, schema, and MCP server |
+| Configure VS Code extension | End user | Extension settings are set and connection test succeeds |
 
-## What You Need
+## Prerequisites Checklist
 
-### On your machine
+Before using the extension, confirm all of these are true.
 
-- VS Code `1.99+`
-- Node.js `20+` if you are building from source
-- Azure CLI `2.x+`
-- An interactive Azure CLI login for the correct tenant
+- Entra app registration exists and uses a real Application ID URI based on the Application (client) ID, not the display name.
+- The app exposes the delegated scope `session:role-any`.
+- Azure CLI is pre-authorized on that app registration.
+- Tenant consent has been handled.
+- Snowflake MCP server already exists.
+- Snowflake External OAuth integration trusts the same Entra app audience.
+- Snowflake can map the token claim to the intended user.
+- The selected Snowflake role is granted to the user and is valid for External OAuth.
 
-### In Microsoft Entra
+If you need the admin procedure, use the next two sections.
 
-You need one app registration dedicated to Snowflake OAuth.
+## Quick Start For End Users
 
-Minimum expected setup:
+Use this path only after the checklist above is already satisfied.
 
-- Sign-in audience: single tenant, typically `AzureADMyOrg`
-- Application ID URI: `api://<app-id>`
+1. Install Azure CLI and sign in with the tenant that owns the Entra app.
+2. Set `snowflakeMcp.endpointUrl`, `snowflakeMcp.azureAppIdUri`, and `snowflakeMcp.role` in VS Code.
+3. Optionally set `snowflakeMcp.azureTenantId` if you need to force a specific tenant.
+4. Leave `snowflakeMcp.useAzureCli` set to `true`.
+5. Run `Snowflake MCP: Refresh Azure Token`.
+6. Run `Snowflake MCP: Test Connection`.
+
+If you do not already have the following four values, stop here and ask your Entra and Snowflake admins. The [Who Does What](#who-does-what) table shows the setup they must complete.
+
+- Snowflake MCP endpoint URL
+- Entra Application ID URI, for example `api://e78b3971-ac83-4da7-ba8e-c99e42e5e8b9`
+- Snowflake role to send in `X-Snowflake-Role`
+- Tenant ID if your org requires tenant pinning
+
+## For Entra Admins
+
+The Entra side is small but strict. The users only need token acquisition to work for one audience, and the extension is entirely dependent on Azure CLI for that runtime flow.
+
+Required app registration shape:
+
+- Sign-in audience: usually single tenant
+- Application ID URI: `api://<application-client-id>`
 - Delegated scope: `session:role-any`
-- Azure CLI pre-authorized on the app: `04b07795-8ddb-461a-bbee-02f9e1bf7b46`
-- Admin consent granted if your tenant requires it
+- Azure CLI pre-authorized as an authorized client application
 
-Why this matters:
-
-- the Application ID URI becomes the token audience
-- the extension uses that value as `snowflakeMcp.azureAppIdUri`
-- Azure CLI must be pre-authorized or consented, otherwise `az account get-access-token` can fail
-
-### In Snowflake
-
-You need all of these:
-
-- an MCP server already created
-- a reachable MCP endpoint URL
-- an External OAuth security integration for Microsoft Entra
-- user mapping between token claims and the Snowflake user
-- role grants that allow the target role to use the MCP server
-
-In the validated setup documented in the upstream project, Snowflake uses:
-
-- `EXTERNAL_OAUTH_TYPE = AZURE`
-- `EXTERNAL_OAUTH_ISSUER = 'https://sts.windows.net/<tenant-id>/'`
-- `EXTERNAL_OAUTH_JWS_KEYS_URL = 'https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys'`
-- `EXTERNAL_OAUTH_AUDIENCE_LIST = ('api://<app-id>')`
-- `EXTERNAL_OAUTH_ANY_ROLE_MODE = 'ENABLE'`
-- `EXTERNAL_OAUTH_TOKEN_USER_MAPPING_CLAIM = 'email'`
-- `EXTERNAL_OAUTH_SNOWFLAKE_USER_MAPPING_ATTRIBUTE = 'email_address'`
-
-That `email` to `email_address` mapping is especially important for guest or external users, because `upn` is often missing for them.
-
-## Entra Setup
-
-This is the setup your Entra admin should complete before anyone installs the extension.
-
-### 1. Create the app registration
-
-Create an app registration, for example `Snowflake MCP OAuth`.
-
-Recommended properties:
-
-- Sign-in audience: single tenant
-- Identifier URI: `api://<app-id>`
-- Scope: `session:role-any`
-
-### 2. Pre-authorize Azure CLI
-
-Pre-authorize Azure CLI on the app registration with this client ID:
+Azure CLI client ID:
 
 ```text
 04b07795-8ddb-461a-bbee-02f9e1bf7b46
 ```
 
-Grant it the delegated permission for `session:role-any`.
+Portal location for pre-authorization:
 
-This is what allows the extension's Azure CLI flow to work without prompting the user for a custom client application.
+- App registrations
+- Your app
+- Expose an API
+- Authorized client applications
 
-### 3. Make sure consent is handled
-
-Depending on tenant policy, one of these must be true:
-
-- admin consent has already been granted
-- users are allowed to consent
-- users run a first login flow that satisfies tenant consent requirements
-
-If this is not done, token acquisition can fail with consent errors such as `AADSTS65001`.
-
-### 4. Know which values users will need
-
-Your users need these exact values from Entra:
+Recommended handoff to users:
 
 - Tenant ID
-- Application ID URI, for example `api://e78b3971-ac83-4da7-ba8e-c99e42e5e8b9`
+- Application ID URI
+- Whether users must sign in with a specific tenant
 
-The client secret is not required by this extension.
+Detailed admin checklist: [ENTRA_ADMIN_CHECKLIST.md](ENTRA_ADMIN_CHECKLIST.md)
 
-## Snowflake Setup
+## For Snowflake Admins
 
-This is the setup your Snowflake admin should complete before anyone uses the extension.
+Snowflake must already be able to accept the Entra token before the extension is introduced.
 
-### 1. Create the MCP server
+### Create the authorization integration
 
-The MCP server must already exist in Snowflake.
+This is mandatory.
+
+The Snowflake admin must create an External OAuth authorization integration, exposed in Snowflake as a security integration, before any user can authenticate with this extension.
+
+Without that integration:
+
+- Snowflake does not trust the Entra-issued token
+- the token audience is never matched
+- the user claim cannot be mapped to a Snowflake user
+- the extension connection test fails even if Azure CLI token acquisition succeeds
+
+At minimum, this integration must define:
+
+- the Entra issuer Snowflake should trust
+- the JWKS URL Snowflake uses to validate token signatures
+- the audience list containing the exact Entra Application ID URI
+- the user-mapping claim and Snowflake user attribute
+- `EXTERNAL_OAUTH_ANY_ROLE_MODE = 'ENABLE'` if you want the requested role header to work
+
+### Required setup
+
+- Create the MCP server.
+- Create the External OAuth security integration.
+- Configure token audience and issuer to match Entra.
+- Set `EXTERNAL_OAUTH_ANY_ROLE_MODE = 'ENABLE'` so the requested role can be selected at request time.
+- Map the user claim to a real Snowflake user.
+- Grant a role that has `USAGE` on the database, schema, and MCP server.
 
 Example endpoint shape:
 
@@ -141,13 +153,9 @@ Example endpoint shape:
 https://<account>.snowflakecomputing.com/api/v2/databases/<database>/schemas/<schema>/mcp-servers/<server>
 ```
 
-Do not append `/mcp`. That path returns `404`.
+Do not append `/mcp`.
 
-### 2. Create the External OAuth integration
-
-Snowflake must trust the Entra-issued token.
-
-The upstream reference setup uses a security integration like this:
+Reference External OAuth shape:
 
 ```sql
 CREATE OR REPLACE SECURITY INTEGRATION azure_oauth_mcp
@@ -162,94 +170,86 @@ CREATE OR REPLACE SECURITY INTEGRATION azure_oauth_mcp
 	EXTERNAL_OAUTH_AUDIENCE_LIST = ('api://<app-id>');
 ```
 
-### 3. Make sure the Snowflake user can be mapped
+Guest-user note:
 
-If you use the recommended `email` mapping, the Snowflake user must have the correct `EMAIL` value.
+- `email` mapping is often safer than `upn` for guest users.
+- It only works if the token's `email` claim matches the Snowflake user's `EMAIL` attribute.
+- If `email` is not reliable in your tenant, verify whether `upn` mapping is usable for all intended users before switching.
 
-Typical setup:
+Role note:
 
-```sql
-ALTER USER <snowflake_user> SET EMAIL = 'user@example.com';
-ALTER USER <snowflake_user> SET LOGIN_NAME = 'user@example.com';
-```
+- Do not plan on `ACCOUNTADMIN` for this flow.
+- Use a least-privileged role where possible.
+- Verify the current integration settings with `DESC SECURITY INTEGRATION azure_oauth_mcp;`.
 
-The `EMAIL` value should match the `email` claim in the Entra token.
+## Validate Before You Debug VS Code
 
-### 4. Grant an allowed role
+This sequence verifies the auth chain from outside the extension.
 
-The extension sends the configured Snowflake role in the `X-Snowflake-Role` header.
-
-That role must:
-
-- be granted to the user
-- be allowed for External OAuth
-- have usage on the database, schema, and MCP server
-
-In many environments, `ACCOUNTADMIN` is blocked for External OAuth. Use a safer allowed role such as `SYSADMIN` or, preferably, a least-privileged custom role.
-
-## Verify The Prerequisites Before Using VS Code
-
-Before you debug the extension, verify the auth chain independently.
-
-### 1. Sign in with Azure CLI
+### 1. Get an Azure CLI session
 
 ```bash
 az login
 ```
 
-If this is the first time you are using the app scope and your tenant requires it, use:
+If tenant consent has not yet been exercised and your policy allows it:
 
 ```bash
 az login --scope "api://<app-id>/session:role-any" --allow-no-subscriptions
 ```
 
-### 2. Request a token for the Entra app
+### 2. Verify token acquisition
 
 ```bash
 az account get-access-token --resource "api://<app-id>" --output json
 ```
 
-The extension first tries the `.default` scope form and then falls back to `--resource`. If you can get a token here, the extension can usually get one too.
+The extension first tries the modern scope form and falls back to `--resource`. If the command above fails, the extension will fail too.
 
-### 3. Call the Snowflake MCP endpoint directly
+### 3. Inspect the important claims
+
+Confirm these claims in the issued token:
+
+- `aud` matches `api://<app-id>`
+- `iss` matches the Snowflake integration issuer
+- `scp` contains `session:role-any`
+- `email` matches the Snowflake user if you use email mapping
+
+If you need to inspect the token payload quickly, decode the access token locally or paste it into a JWT inspection tool approved by your organization.
+
+### 4. Verify endpoint reachability and role assumption
+
+This step assumes the Snowflake External OAuth integration already exists and matches the same audience and issuer values you validated earlier.
 
 ```bash
 TOKEN=$(az account get-access-token --resource "api://<app-id>" --query accessToken -o tsv)
+ROLE="<role-you-can-assume>"
 
 curl -s -X POST "https://<account>.snowflakecomputing.com/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<server>" \
 	-H "Authorization: Bearer $TOKEN" \
 	-H "X-Snowflake-Authorization-Token-Type: OAUTH" \
-	-H "X-Snowflake-Role: SYSADMIN" \
+	-H "X-Snowflake-Role: $ROLE" \
 	-H "Content-Type: application/json" \
-	-d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+	-d '{
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {
+			"name": "sql-exec-tool",
+			"arguments": {
+				"sql": "SELECT CURRENT_USER() AS user, CURRENT_ROLE() AS role"
+			}
+		}
+	}'
 ```
 
-If this fails, fix Entra or Snowflake first. Do not start by debugging VS Code.
+This validates more than raw reachability. It verifies that token acquisition works, the endpoint is correct, the user is mapped, and the chosen role can actually be assumed.
 
-## Install And Configure The Extension
+Windows users can run the same request with PowerShell or WSL if plain `curl` is not convenient.
 
-Once Entra and Snowflake are ready, the extension setup is small.
+## Extension Settings
 
-### 1. Install Azure CLI and sign in
-
-The current implementation requires Azure CLI at runtime. This is not optional.
-
-```bash
-az login
-```
-
-### 2. Configure the extension settings
-
-Set these values in VS Code settings:
-
-- `snowflakeMcp.endpointUrl`
-- `snowflakeMcp.azureAppIdUri`
-- `snowflakeMcp.azureTenantId` if you want to force a specific tenant
-- `snowflakeMcp.role`
-- `snowflakeMcp.serverLabel`
-- `snowflakeMcp.useAzureCli` and leave it as `true`
-
-Example:
+Example configuration:
 
 ```json
 {
@@ -262,30 +262,6 @@ Example:
 }
 ```
 
-Notes:
-
-- `snowflakeMcp.endpointUrl` must be a valid `http` or `https` URL
-- `snowflakeMcp.azureAppIdUri` is required
-- `snowflakeMcp.useAzureCli` must remain enabled in the current release
-
-You can also keep equivalent local values in [.env.example](.env.example) for development reference.
-
-### 3. Test from the Command Palette
-
-Run these commands:
-
-- `Snowflake MCP: Refresh Azure Token`
-- `Snowflake MCP: Test Connection`
-- `Snowflake MCP: Show Effective Configuration`
-
-Expected result:
-
-- token refresh succeeds
-- connection test returns success from Snowflake
-- effective configuration shows no configuration issues
-
-## Settings Reference
-
 | Setting | Required | Meaning |
 |---|---|---|
 | `snowflakeMcp.endpointUrl` | Yes | Full Snowflake MCP endpoint URL |
@@ -294,6 +270,65 @@ Expected result:
 | `snowflakeMcp.role` | No | Snowflake role sent in `X-Snowflake-Role` |
 | `snowflakeMcp.serverLabel` | No | Display label for the MCP server inside VS Code |
 | `snowflakeMcp.useAzureCli` | Yes | Must remain `true` in the current implementation |
+
+Equivalent local values for development are shown in [.env.example](.env.example).
+
+## Command Palette Commands
+
+- `Snowflake MCP: Refresh Azure Token`
+- `Snowflake MCP: Test Connection`
+- `Snowflake MCP: Show Effective Configuration`
+
+## Troubleshooting
+
+### `az account get-access-token` fails
+
+Usually one of these is wrong:
+
+- wrong tenant
+- missing or restricted consent
+- Azure CLI not pre-authorized on the app registration
+- wrong Application ID URI
+
+First retry with:
+
+```bash
+az login --scope "api://<app-id>/session:role-any" --allow-no-subscriptions
+```
+
+### Snowflake returns `404`
+
+Your endpoint is wrong. Use:
+
+```text
+/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<server>
+```
+
+Do not append `/mcp`.
+
+### Snowflake returns auth or role errors
+
+Check all of these:
+
+- `aud` matches `EXTERNAL_OAUTH_AUDIENCE_LIST`
+- `iss` matches `EXTERNAL_OAUTH_ISSUER`
+- the mapped claim matches the Snowflake user
+- the user can assume the role sent in `X-Snowflake-Role`
+- the role has usage on the database, schema, and MCP server
+
+### Guest or external users fail unexpectedly
+
+Verify that the token actually contains an `email` claim and that it exactly matches the Snowflake user's `EMAIL` attribute.
+
+### The extension reports configuration issues
+
+Run `Snowflake MCP: Show Effective Configuration`.
+
+The current release requires:
+
+- a valid endpoint URL
+- a non-empty `snowflakeMcp.azureAppIdUri`
+- `snowflakeMcp.useAzureCli = true`
 
 ## Development
 
@@ -310,63 +345,13 @@ To create a VSIX locally:
 npm run package:vsix
 ```
 
-## Troubleshooting
-
-### `az account get-access-token` fails
-
-Usually one of these is wrong:
-
-- wrong tenant
-- missing app consent
-- Azure CLI was not pre-authorized on the app registration
-- wrong `snowflakeMcp.azureAppIdUri`
-
-Try:
-
-```bash
-az login --scope "api://<app-id>/session:role-any" --allow-no-subscriptions
-```
-
-### The Snowflake test returns `404`
-
-Check the endpoint URL.
-
-The correct form is:
-
-```text
-/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<server>
-```
-
-Do not append `/mcp`.
-
-### The Snowflake test returns auth or role errors
-
-Usually one of these is wrong:
-
-- the token audience does not match `EXTERNAL_OAUTH_AUDIENCE_LIST`
-- the token issuer does not match `EXTERNAL_OAUTH_ISSUER`
-- the user could not be mapped from the token claim
-- the chosen role is not granted to the user
-- the chosen role is blocked for External OAuth
-
-### Guest or external users cannot connect
-
-Use `email` claim mapping unless you have verified that `upn` is always present in your tenant scenario.
-
-For guest users, ensure the Snowflake user's `EMAIL` attribute matches the Entra token's `email` claim.
-
 ## Current Limitation
 
-Runtime authentication currently depends on Azure CLI.
+Runtime authentication still depends on Azure CLI.
 
-If you disable `snowflakeMcp.useAzureCli`, the extension reports a configuration error. Extension-managed sign-in is not implemented yet.
+Extension-managed sign-in is not implemented yet.
 
-## Reference Material
+## References
 
-The setup described above is based on the validated Snowflake MCP work in the upstream project:
-
-- <https://github.com/MiguelElGallo/mpz/tree/main/snowflake-mcp>
-
-## Support
-
-Issues and feature requests: <https://github.com/MiguelElGallo/snowmcpaz/issues>
+- Upstream Snowflake MCP setup: <https://github.com/MiguelElGallo/mpz/tree/main/snowflake-mcp>
+- Support and issues: <https://github.com/MiguelElGallo/snowmcpaz/issues>
