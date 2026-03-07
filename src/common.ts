@@ -6,7 +6,7 @@ const DEFAULT_ROLE = 'SYSADMIN';
 const REQUEST_TIMEOUT_MS = 30000;
 
 export const MCP_PROTOCOL_VERSION = '2024-11-05';
-export const EXTENSION_VERSION = '0.0.3';
+export const EXTENSION_VERSION = '0.0.4';
 
 export interface ResolvedConfig {
   endpointUrl: string;

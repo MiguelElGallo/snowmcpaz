@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.4
+
+- Overrides vulnerable transitive dev dependencies pulled in through Mocha.
+- Resolves the `serialize-javascript` RCE advisory and the related `diff` advisory in the development toolchain.
+
 ## 0.0.3
 
 - Fixes the extension-reported protocol version metadata to match the published package version.

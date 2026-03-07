@@ -2,7 +2,7 @@
   "name": "snowflake-mcp-vscode",
   "displayName": "Snowflake MCP for Azure Auth",
   "description": "VS Code extension that exposes a Snowflake MCP server through a local Node.js broker using Microsoft Entra authentication.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "MiguelPeredoZ",
   "license": "MIT",
   "pricing": "Free",
@@ -116,5 +116,9 @@
     "esbuild": "^0.25.0",
     "mocha": "^11.1.0",
     "typescript": "^5.8.2"
+  },
+  "overrides": {
+    "serialize-javascript": "7.0.4",
+    "diff": "8.0.3"
   }
 }
