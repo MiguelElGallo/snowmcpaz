@@ -1,0 +1,119 @@
+{
+  "name": "snowflake-mcp-vscode",
+  "displayName": "Snowflake MCP for Azure Auth",
+  "description": "VS Code extension that exposes a Snowflake MCP server through a local Node.js broker using Microsoft Entra authentication.",
+  "version": "0.0.1",
+  "publisher": "MiguelPeredoZ",
+  "license": "MIT",
+  "pricing": "Free",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MiguelElGallo/snowmcpaz.git"
+  },
+  "homepage": "https://github.com/MiguelElGallo/snowmcpaz#readme",
+  "bugs": {
+    "url": "https://github.com/MiguelElGallo/snowmcpaz/issues"
+  },
+  "files": [
+    "dist/**",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other",
+    "Chat"
+  ],
+  "keywords": [
+    "mcp",
+    "snowflake",
+    "azure",
+    "entra",
+    "copilot"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "snowflakeMcp.refreshAzureToken",
+        "title": "Snowflake MCP: Refresh Azure Token"
+      },
+      {
+        "command": "snowflakeMcp.testConnection",
+        "title": "Snowflake MCP: Test Connection"
+      },
+      {
+        "command": "snowflakeMcp.showConfiguration",
+        "title": "Snowflake MCP: Show Effective Configuration"
+      }
+    ],
+    "configuration": {
+      "title": "Snowflake MCP for Azure Auth",
+      "properties": {
+        "snowflakeMcp.endpointUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Snowflake MCP endpoint URL, for example `https://<account>.snowflakecomputing.com/api/v2/databases/<db>/schemas/<schema>/mcp-servers/<name>`."
+        },
+        "snowflakeMcp.azureAppIdUri": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Application ID URI for the Microsoft Entra app used to obtain the Snowflake External OAuth token, for example `api://<app-id>`."
+        },
+        "snowflakeMcp.azureTenantId": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Tenant ID used when requesting the Microsoft Entra token."
+        },
+        "snowflakeMcp.role": {
+          "type": "string",
+          "default": "SYSADMIN",
+          "markdownDescription": "Snowflake role sent to the MCP endpoint using the `X-Snowflake-Role` header."
+        },
+        "snowflakeMcp.serverLabel": {
+          "type": "string",
+          "default": "snowflakeMcpAzAuth",
+          "markdownDescription": "Label shown in VS Code for the generated MCP server definition."
+        },
+        "snowflakeMcp.useAzureCli": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Use Azure CLI as the token source. The initial version of the extension requires this to stay enabled."
+        }
+      }
+    },
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "snowflake-mcp-vscode.provider",
+        "label": "Snowflake MCP for Azure Auth"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc --noEmit",
+    "test:broker": "npm run build && node --test ./test/broker.test.mjs",
+    "test:e2e": "npm run build && node ./test/runTest.mjs",
+    "test": "npm run test:broker && npm run test:e2e",
+    "package:vsix": "vsce package --no-dependencies",
+    "verify": "npm run check && npm test && npm run package:vsix",
+    "prepublishOnly": "npm run check && npm run build",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.2",
+    "@types/vscode": "^1.99.0",
+    "esbuild": "^0.25.0",
+    "mocha": "^11.1.0",
+    "typescript": "^5.8.2"
+  }
+}
