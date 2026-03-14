@@ -2,7 +2,7 @@
 
 ## 0.0.6
 
-- Bumps `undici` dev dependency from 7.22.0 to 7.24.1 via Dependabot to address upstream fixes.
+- Bumps transitive `undici` dependency in the dev toolchain (via `cheerio`) from 7.22.0 to 7.24.1 via Dependabot to address upstream fixes.
 
 ## 0.0.5
 
