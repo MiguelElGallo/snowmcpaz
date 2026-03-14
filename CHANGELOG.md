@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.6
+
+- Bumps `undici` dev dependency from 7.22.0 to 7.24.1 via Dependabot to address upstream fixes.
+
 ## 0.0.5
 
 - Rewrites the README around role-based setup, with clearer end-user, Entra admin, and Snowflake admin paths.
